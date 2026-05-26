@@ -106,6 +106,8 @@ void AActionCharacter::BeginPlay()
 		CombatComponent->OnHitEnemy.AddUObject(this, &AActionCharacter::OnHitEnemy);
 	}
 
+	DefaultSocketOffset = CameraBoom->SocketOffset;
+
 	if (LockOnComponent)
 	{
 		LockOnComponent->OnLockOnChanged.AddUObject(this, &AActionCharacter::OnLockOnChanged);
@@ -128,34 +130,36 @@ void AActionCharacter::Tick(float DeltaTime)
 	//ロックオン中のカメラ制御
 	if (LockOnComponent && LockOnComponent->IsLockedOn())
 	{
-		AActor* Target = LockOnComponent->GetTarget();
-		if (Target && Controller)
-		{
-			//プレイヤーとターゲットの中間点を計算
-			FVector PlayerLocation = GetActorLocation();
-			FVector TargetLocation = Target->GetActorLocation();
+		UpdateLockOnCamera(DeltaTime);
 
-			//カメラからターゲットへの方向を計算
-			FVector CameraLocation = FollowCamera->GetComponentLocation();
-			FVector ToTarget = (TargetLocation - CameraLocation).GetSafeNormal();
+		//AActor* Target = LockOnComponent->GetTarget();
+		//if (Target && Controller)
+		//{
+		//	//プレイヤーとターゲットの中間点を計算
+		//	FVector PlayerLocation = GetActorLocation();
+		//	FVector TargetLocation = Target->GetActorLocation();
 
-			FRotator TargetRotation = ToTarget.Rotation();
+		//	//カメラからターゲットへの方向を計算
+		//	FVector CameraLocation = FollowCamera->GetComponentLocation();
+		//	FVector ToTarget = (TargetLocation - CameraLocation).GetSafeNormal();
 
-			//滑らかにカメラを向ける
-			FRotator CurrentRotation = Controller->GetControlRotation();
-			FRotator NewRotation = FMath::RInterpTo(CurrentRotation, TargetRotation, DeltaTime, 5.f);
+		//	FRotator TargetRotation = ToTarget.Rotation();
 
-			Controller->SetControlRotation(NewRotation);
+		//	//滑らかにカメラを向ける
+		//	FRotator CurrentRotation = Controller->GetControlRotation();
+		//	FRotator NewRotation = FMath::RInterpTo(CurrentRotation, TargetRotation, DeltaTime, 5.f);
 
-			//プレイヤーも敵の方向を向く
-			FVector ToTargetFlat = (TargetLocation - PlayerLocation);
-			ToTargetFlat.Z = 0.f;
-			if (!ToTargetFlat.IsNearlyZero())
-			{
-				FRotator PlayerRotation = ToTargetFlat.GetSafeNormal().Rotation();
-				SetActorRotation(FMath::RInterpTo(GetActorRotation(), PlayerRotation, DeltaTime, 10.f));
-			}
-		}
+		//	Controller->SetControlRotation(NewRotation);
+
+		//	//プレイヤーも敵の方向を向く
+		//	FVector ToTargetFlat = (TargetLocation - PlayerLocation);
+		//	ToTargetFlat.Z = 0.f;
+		//	if (!ToTargetFlat.IsNearlyZero())
+		//	{
+		//		FRotator PlayerRotation = ToTargetFlat.GetSafeNormal().Rotation();
+		//		SetActorRotation(FMath::RInterpTo(GetActorRotation(), PlayerRotation, DeltaTime, 10.f));
+		//	}
+		//}
 	}
 
 	//キャラクターの現在の平行移動速度を取得
@@ -241,15 +245,70 @@ void AActionCharacter::OnLockOnChanged(AActor* NewTarget)
 		//ロックON：プレイヤーをコントローラーのYawに従わせる
 		bUseControllerRotationYaw = true;
 		GetActionMovementComponent()->bOrientRotationToMovement = false;
-		//GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Cyan, FString::Printf(TEXT("ロックオン： %s"), *NewTarget->GetName()));
+
+		//カメラを横にずらしてプレイヤーとターゲット両方映す
+		CameraBoom->SocketOffset = FVector(
+			DefaultSocketOffset.X,
+			DefaultSocketOffset.Y + LockOnCameraOffsetY,
+			DefaultSocketOffset.Z
+		);
+
+		GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Cyan, FString::Printf(TEXT("ロックオン： %s"), *NewTarget->GetName()));
 	}
 	else
 	{
 		//ロックオンOFF：通常の移動方向向きに戻す
 		bUseControllerRotationYaw = false;
 		GetActionMovementComponent()->bOrientRotationToMovement = true;
-		//GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Purple,TEXT("FinithLockOn"));
 
+		//ソケットオフセットを元に戻す
+		CameraBoom->SocketOffset = DefaultSocketOffset;
+
+		GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Purple,TEXT("FinithLockOn"));
+
+	}
+}
+
+void AActionCharacter::UpdateLockOnCamera(float DeltaTime)
+{
+	AActor* Target = LockOnComponent->GetTarget();
+	if (!Target || !Controller) return;
+
+	FVector PlayerLocation = GetActorLocation();
+	FVector TargetLocation = Target->GetActorLocation();
+
+	//プレイヤーと敵の中間点をカメラの注視点にする
+	FVector MidPoint = (PlayerLocation + TargetLocation) * 0.5f;
+
+	//カメラ位置から中間点への方向でRotatorを作る
+	FVector CameraLocation = FollowCamera->GetComponentLocation();
+	FVector ToMid = (MidPoint - CameraLocation).GetSafeNormal();
+	FRotator TargetRot = ToMid.Rotation();
+
+	//距離に応じて補完速度を変える
+	float Distance = FVector::Dist(PlayerLocation, TargetLocation);
+	float DynamicInterpSpeed = FMath::GetMappedRangeValueClamped(
+		FVector2D(200.f, 1500.f),  //距離レンジ
+		FVector2D(2.f, LockOnCameraInterpSpeed),  //対応する補完速度レンジ
+		Distance
+	);
+
+	FRotator CurrentRot = Controller->GetControlRotation();
+	FRotator NewRot = FMath::RInterpTo(CurrentRot, TargetRot, DeltaTime, DynamicInterpSpeed);
+
+	// 極端な見上げ・見下ろしを防ぐ
+	NewRot.Pitch = FMath::Clamp(NewRot.Pitch, LockOnPitchMin, LockOnPitchMax);
+	NewRot.Roll = 0.f;
+
+	Controller->SetControlRotation(NewRot);
+
+	// プレイヤーも敵の方向を向く
+	FVector ToTargetFlat = (Target->GetActorLocation() - PlayerLocation);
+	ToTargetFlat.Z = 0.f;
+	if (!ToTargetFlat.IsNearlyZero())
+	{
+		FRotator PlayerRot = ToTargetFlat.GetSafeNormal().Rotation();
+		SetActorRotation(FMath::RInterpTo(GetActorRotation(), PlayerRot, DeltaTime, 10.f));
 	}
 }
 
@@ -301,6 +360,13 @@ void AActionCharacter::Look(const FInputActionValue& Value)
 
 	if (Controller != nullptr)
 	{
+		//ロックオン中は右スティックをターゲット切り替えに使う
+		if (LockOnComponent && LockOnComponent->IsLockedOn())
+		{
+			LockOnComponent->TrySwitchTarget(LookAxisVector.X);
+			return;
+		}
+
 		//左右のカメラ回転（Yaw）
 		AddControllerYawInput(LookAxisVector.X);
 		//上下のカメラ回転（Pitch）

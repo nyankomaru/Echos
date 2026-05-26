@@ -11,12 +11,12 @@
 
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnLockOnChanged, AActor*);
 
-UCLASS( ClassGroup=(Custom), meta=(BlueprintSpawnableComponent) )
+UCLASS(ClassGroup = (Custom), meta = (BlueprintSpawnableComponent))
 class ECHO_API ULockOnComponent : public UActorComponent
 {
 	GENERATED_BODY()
 
-public:	
+public:
 	ULockOnComponent();
 
 	//トグル
@@ -24,6 +24,10 @@ public:
 
 	//ロックオン中のみ右スティック入力で隣の敵に切り替え
 	void TrySwitchTarget(float StickX);
+
+	//敵が死亡した瞬間に呼ばれる
+	UFUNCTION()
+	void OnEnemyEliminated(AEnemyChara* EliminatedEnemy);
 
 	//現在のターゲットを取得
 	AActor* GetTarget() const { return CurrentTarget.Get(); }
@@ -37,7 +41,7 @@ public:
 protected:
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
-private:	
+private:
 	//現在のターゲット
 	TWeakObjectPtr<AActor> CurrentTarget;
 

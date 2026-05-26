@@ -113,9 +113,34 @@ protected:
 	//回避入力時に呼ばれる関数
 	void Dodge();
 
+	// --- ロックオン処理 ---
 
 	//ロックオン状態を切り替える関数
 	void OnLockOnChanged(AActor* NewTarget);
+
+	//ロックオン中のカメラ補間速度
+	UPROPERTY(EditAnywhere, Category = "LockOn")
+	float LockOnCameraInterpSpeed = 5.f;
+
+	//ロックオン中のカメラの距離オフセット
+	UPROPERTY(EditAnywhere, Category = "LockOn")
+	float LockOnCameraOffsetY = 80.f;
+
+	//ロックオン中カメラPitchの下限
+	UPROPERTY(EditAnywhere, Category = "LockOn")
+	float LockOnPitchMin = -50.f;
+
+	//ロックオン中カメラPitchの上限
+	UPROPERTY(EditAnywhere, Category = "LockOn")
+	float LockOnPitchMax = 50.f;
+
+	FVector DefaultSocketOffset;
+
+	//ロックオン中のかどうかのフラグ
+	bool bsLockedOn = false;
+
+	//ロックオン中のカメラの更新
+	void UpdateLockOnCamera(float DeltaTime);
 
 	// --- 移動・ダッシュ関連のパラメータ ---
 

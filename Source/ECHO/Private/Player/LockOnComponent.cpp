@@ -27,6 +27,7 @@ void ULockOnComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActo
 	//ターゲットが無効になったら自動解除
 	if (!IsTargetValid(CurrentTarget.Get()))
 	{
+		UE_LOG(LogTemp, Log, TEXT("[LockOn] ターゲット無効により自動解除: %s"), *CurrentTarget->GetName());
 		ClearLockOn();
 	}
 }
@@ -35,6 +36,7 @@ void ULockOnComponent::ToggleLockOn()
 {
 	if (IsLockedOn())
 	{
+		UE_LOG(LogTemp, Log, TEXT("[LockOn] 手動解除"));
 		ClearLockOn();
 	}
 	else
@@ -43,7 +45,19 @@ void ULockOnComponent::ToggleLockOn()
 		if (Best)
 		{
 			CurrentTarget = Best;
+			
+			AEnemyChara* Enemy = Cast <AEnemyChara>(Best);
+			if (Enemy)
+			{
+				Enemy->m_onEnemyEliminated.AddUniqueDynamic(this, &ULockOnComponent::OnEnemyEliminated);
+			}
+
+			UE_LOG(LogTemp, Log, TEXT("[LockOn] ロックオン開始: %s"), *Best->GetName());
 			OnLockOnChanged.Broadcast(Best);
+		}
+		else
+		{
+			UE_LOG(LogTemp, Log, TEXT("[LockOn] 対象なし、ロックオンできませんでした"));
 		}
 	}
 }
@@ -64,22 +78,60 @@ void ULockOnComponent::TrySwitchTarget(float StickX)
 		AActor* Next = FindNextTarget(StickX);
 		if (Next && Next != CurrentTarget.Get())
 		{
+			//旧ターゲットのデリゲートを解除
+			AEnemyChara* OldEnemy = Cast<AEnemyChara>(CurrentTarget.Get());
+			if (OldEnemy)
+			{
+				OldEnemy->m_onEnemyEliminated.RemoveDynamic(this, &ULockOnComponent::OnEnemyEliminated);
+			}
+
+			//新ターゲットのデリゲートを受け取る
+			AEnemyChara* NewEnemy = Cast<AEnemyChara>(Next);
+			if (NewEnemy)
+			{
+				NewEnemy->m_onEnemyEliminated.AddUniqueDynamic(this, &ULockOnComponent::OnEnemyEliminated);
+			}
+
 			CurrentTarget = Next;
-			OnLockOnChanged.Broadcast(Next);
 			SwitchCooldownTimer = SwitchCooldown;
+
+			UE_LOG(LogTemp, Log, TEXT("[LockOn] ターゲット切り替え: %s"), *Next->GetName());
+
+			OnLockOnChanged.Broadcast(Next);
 		}
 	}
 
 	//スティックを戻したらフラグをリセット
 	if (FMath::Abs(StickX) < SwitchThreshold * 0.5f)
 	{
-		bSwitchInputActive;
+		bSwitchInputActive = false;
+	}
+}
+
+void ULockOnComponent::OnEnemyEliminated(AEnemyChara* EliminatedEnemy)
+{
+	if (!EliminatedEnemy) return;
+
+	//倒された敵が現在のターゲットなら即解除
+	if (CurrentTarget.Get() == EliminatedEnemy)
+	{
+		UE_LOG(LogTemp, Log, TEXT("[LockOn] ターゲット死亡により解除: %s"), *EliminatedEnemy->GetName());
+		ClearLockOn();
 	}
 }
 
 void ULockOnComponent::ClearLockOn()
 {
+	//デリゲートを解除してからクリア
+	AEnemyChara* Enemy = Cast<AEnemyChara>(CurrentTarget.Get());
+	if (Enemy)
+	{
+		Enemy->m_onEnemyEliminated.RemoveDynamic(this, &ULockOnComponent::OnEnemyEliminated);
+	}
+
 	CurrentTarget = nullptr;
+	bSwitchInputActive = false;
+	SwitchCooldown = 0.f;
 	OnLockOnChanged.Broadcast(nullptr);
 }
 
@@ -101,6 +153,9 @@ bool ULockOnComponent::IsTargetValid(AActor* Target) const
 	//死亡チェック（Poolに戻ってもDestroyされてないので必須）
 	AEnemyChara* Enemy = Cast<AEnemyChara>(Target);
 	if (Enemy && Enemy->GetCurrentState() == EEnemyState::Dead) return false;
+
+	//非表示チェック
+	if (Target->IsHidden()) return false;
 
 	return true;
 }
