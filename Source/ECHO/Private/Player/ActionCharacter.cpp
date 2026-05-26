@@ -241,14 +241,14 @@ void AActionCharacter::OnLockOnChanged(AActor* NewTarget)
 		//ロックON：プレイヤーをコントローラーのYawに従わせる
 		bUseControllerRotationYaw = true;
 		GetActionMovementComponent()->bOrientRotationToMovement = false;
-		GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Cyan, FString::Printf(TEXT("ロックオン： %s"), *NewTarget->GetName()));
+		//GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Cyan, FString::Printf(TEXT("ロックオン： %s"), *NewTarget->GetName()));
 	}
 	else
 	{
 		//ロックオンOFF：通常の移動方向向きに戻す
 		bUseControllerRotationYaw = false;
 		GetActionMovementComponent()->bOrientRotationToMovement = true;
-		GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Purple,TEXT("FinithLockOn"));
+		//GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Purple,TEXT("FinithLockOn"));
 
 	}
 }
