@@ -16,16 +16,19 @@ class ECHO_API UCombatComponent : public UActorComponent
 public:
     UCombatComponent();
 
+    //攻撃ボタン入力時の関数
     void ExecuteAttack();
+    //回避ボタン入力時の関数
     void ExecuteDodge();
+    //キャラクターの着地時などに、空中回避の使用済みフラグをリセットする関数
     void ResetAirDodge();
 
-    bool IsAttacking() const { return bIsAttaking; }
+    bool IsAttacking() const { return bIsAttacking; }
     bool IsDodging()   const { return bIsDodging; }
     bool CanDodge()    const { return bCanDodge; }
 
 protected:
-    bool bIsAttaking = false;
+    bool bIsAttacking = false;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|Animation")
     UAnimMontage* AttackMontage;

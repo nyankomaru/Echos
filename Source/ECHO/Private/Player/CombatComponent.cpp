@@ -1,6 +1,7 @@
 // CombatComponent.cpp
 
 #include "Player/CombatComponent.h"
+#include "Player/ActionMovementComponent.h"
 #include "Enemy/EnemyChara.h"
 #include "Kismet/GameplayStatics.h"
 #include "GameFramework/Character.h"
@@ -19,13 +20,13 @@ UCombatComponent::UCombatComponent()
 // -----------------------------------------------------------------------
 void UCombatComponent::ExecuteAttack()
 {
-    if (bIsAttaking) return;
+    if (bIsAttacking) return;
 
     ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner());
     if (!OwnerCharacter) return;
 
     HitActorsThisAttack.Empty();
-    bIsAttaking = true;
+    bIsAttacking = true;
 
     if (AttackMontage)
     {
@@ -44,7 +45,7 @@ void UCombatComponent::ExecuteAttack()
     }
     else
     {
-        bIsAttaking = false;
+        bIsAttacking = false;
     }
 
     GEngine->AddOnScreenDebugMessage(-1, 1.f, FColor::Green, TEXT("Attack!"));
@@ -56,7 +57,7 @@ void UCombatComponent::ExecuteAttack()
 // -----------------------------------------------------------------------
 void UCombatComponent::ResetAttack()
 {
-    bIsAttaking = false;
+    bIsAttacking = false;
     HitActorsThisAttack.Empty();
 }
 
@@ -69,7 +70,7 @@ void UCombatComponent::ExecuteDodge()
 
     bIsDodging = true;
 
-    if (bIsAttaking) return;
+    if (bIsAttacking) return;
 
     ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner());
     if (!OwnerCharacter) return;
@@ -77,25 +78,30 @@ void UCombatComponent::ExecuteDodge()
     UCharacterMovementComponent* MoveComp = OwnerCharacter->GetCharacterMovement();
     if (!MoveComp) return;
 
+    //入力方向を回避方向とする。入力がない場合は正面方向
     FVector DodgeDirection = MoveComp->GetLastInputVector();
     if (DodgeDirection.IsNearlyZero())
     {
         DodgeDirection = OwnerCharacter->GetActorForwardVector();
     }
 
+    //空中での回避制限チェック（一回まで）
     if (MoveComp->IsFalling())
     {
         if (bHasAirDodged) return;
         bHasAirDodged = true;
     }
 
+    //回避クールダウンタイマーの開始
     bCanDodge = false;
     GetWorld()->GetTimerManager().SetTimer(
         DodgeCoolDownTimerHandle, this,
         &UCombatComponent::ResetDodgeCooldown,
         DodgeCooldown, false);
 
+    //完全に水平方向へ滑らせる
     DodgeDirection.Z = 0.f;
+    //元の重力と摩擦を0にする
     CachedGravityScale = MoveComp->GravityScale;
     CachedGroundFriction = MoveComp->GroundFriction;
 
@@ -107,6 +113,7 @@ void UCombatComponent::ExecuteDodge()
         &UCombatComponent::EndDodge,
         DodgeDuration, false);
 
+    //キャラクターを強引に押し出す
     OwnerCharacter->LaunchCharacter(
         DodgeDirection.GetSafeNormal() * DodgeForce, true, true);
 }
@@ -120,10 +127,10 @@ void UCombatComponent::EndDodge()
         MoveComp->GravityScale = CachedGravityScale;
         MoveComp->GroundFriction = CachedGroundFriction;
 
-        FVector V = MoveComp->Velocity;
-        V.X = 0.f;
-        V.Y = 0.f;
-        MoveComp->Velocity = V;
+        FVector Vel = MoveComp->Velocity;
+        Vel.X = 0.f;
+        Vel.Y = 0.f;
+        MoveComp->Velocity = Vel;
     }
     bIsDodging = false;
 }
