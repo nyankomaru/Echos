@@ -2,6 +2,7 @@
 #include "Enemy/AIController/EnemyAIController.h"
 #include "Enemy/EnemyPool/EnemyPool.h"
 #include "Perception/PawnSensingComponent.h"
+#include "Enemy/EnemyPool/WaveManager.h"
 #include "GameFramework/CharacterMovementComponent.h"
 
 // Sets default values
@@ -53,33 +54,46 @@ void AEnemyChara::Tick(float DeltaTime)
 
 }
 
+//ダメージを受ける関数
 float AEnemyChara::TakeDamage(float _damageAmount, FDamageEvent const& _damageEvent, AController* _eventInstigator, AActor* _damageCauser)
 {
+	//ダメージ処理を行う前に、親クラスのTakeDamage関数を呼び出す
 	Super::TakeDamage(_damageAmount, _damageEvent, _eventInstigator, _damageCauser);
 
+	//体力を減らす
 	m_currentHP = FMath::Clamp(m_currentHP - _damageAmount, 0, m_maxHP);
 
+	//体力が0以下になったら死亡処理を行う
 	if (m_currentHP <= 0.f)
 	{
 		Die();
 	}
 
+	//ダメージ量を返す
 	return _damageAmount;
 }
 
+//攻撃関数
 void AEnemyChara::Attack()
 {
+	//ターゲットがいない場合は攻撃しない
 	if (!m_targetActor) { return; }
 
+	//攻撃処理を行う（ここではダメージを与えるだけの簡単な処理）
 	GetWorld()->GetTimerManager().SetTimer(m_attackTimerHandle, this, &AEnemyChara::ResetTimer, m_cooldownTimer, false);
 }
 
+//タイマーをリセットする関数
 void AEnemyChara::ResetTimer()
 {
+	//攻撃後のクールダウンが終わったら、ステートをIdleに戻す
 	m_currentState = EEnemyState::Idle;
+	
+	//攻撃タイマーをクリア
 	GetWorld()->GetTimerManager().ClearTimer(m_attackTimerHandle);
 }
 
+//死亡処理関数
 void AEnemyChara::Die()
 {
 	//現在のステートを死亡にする
@@ -88,8 +102,11 @@ void AEnemyChara::Die()
 	//攻撃タイマーをクリア
 	GetWorld()->GetTimerManager().ClearTimer(m_attackTimerHandle);
 	
-	//イベント通知
-	m_onEnemyEliminated.Broadcast(this);
+	//敵が倒されたことを通知
+	if(AWaveManager* waveManager = Cast<AWaveManager>(GetOwner()))
+	{
+		waveManager->NotifyEnemyDefeated(this);
+	}
 
 	//プールへ戻す
 	AEnemyPool* enemyPool = Cast<AEnemyPool>(GetOwner());

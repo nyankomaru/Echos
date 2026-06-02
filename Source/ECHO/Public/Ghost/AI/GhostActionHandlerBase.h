@@ -5,7 +5,7 @@
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
-#include "Ghost/GhostType.h"
+#include "Ghost/Data/GhostTypes.h"
 #include "GhostActionHandlerBase.generated.h"
 
 UCLASS(ClassGroup = (Custom), meta = (BlueprintSpawnableComponent))

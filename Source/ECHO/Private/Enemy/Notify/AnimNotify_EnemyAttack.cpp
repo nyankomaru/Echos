@@ -9,12 +9,14 @@ void UAnimNotify_EnemyAttack::Notify(USkeletalMeshComponent* _meshComp, UAnimSeq
 	Super::Notify(_meshComp, _animation);
 	if (!_meshComp) { return; }
 
-	AMinionChara* owner = Cast<AMinionChara>(_meshComp);
+	//オーナーを取得し、取得できなかったら処理しない
+	AMinionChara* owner = Cast<AMinionChara>(_meshComp->GetOwner());
 	if (!owner) { return; }
 
 	owner->Attack();
 }
 
+//名前を返す関数
 FString UAnimNotify_EnemyAttack::GetNotifyName_Implementation() const
 {
 	return FString("EnemyAttack");

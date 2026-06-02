@@ -2,7 +2,7 @@
 
 #include "Ghost/AI/BTTask_GhostAttack.h"
 #include "Ghost/AI/GhostAttackHandler.h"
-#include "Ghost/GhostType.h"
+#include "Ghost/Data/GhostTypes.h"
 #include "AIController.h"
 #include "GameFramework/Character.h"
 #include "BehaviorTree/BehaviorTreeComponent.h"

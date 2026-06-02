@@ -1,29 +1,46 @@
-//GhostAIController.h
-
 #pragma once
 
 #include "CoreMinimal.h"
 #include "AIController.h"
 #include "GhostAIController.generated.h"
 
+
 UCLASS()
 class ECHO_API AGhostAIController : public AAIController
 {
-    GENERATED_BODY()
-
+	GENERATED_BODY()
+	
 public:
     AGhostAIController();
 
     virtual void OnPossess(APawn* InPawn) override;
-
-    //Tickã§æ•µã¨ã®è·é›¢ã‚’ç›£è¦–ã—ã¦Blackboardã‚’æ›´æ–°
     virtual void Tick(float DeltaTime) override;
 
-private:
-    //æ”»æ’ƒç¯„å›²
-    UPROPERTY(EditAnywhere, Category = "GhostAI")
+    // -----------------------------------------------------------------------
+    // İ’è
+    // -----------------------------------------------------------------------
+
+    /** UŒ‚‚ğÀs‚·‚é‹——£i‚±‚Ì”ÍˆÍ“à‚É“ü‚Á‚½‚çUŒ‚j */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "GhostAI")
     float AttackRange = 150.f;
 
-    //æœ€å¯„ã‚Šã®æ•µã‚’æ¢ã™
-    AActor* FindNearestEnemy() const;
+    /** UŒ‚ŠÔŠui•bjB˜A‘Å–h~ */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "GhostAI")
+    float AttackCooldown = 1.2f;
+
+private:
+    /** ƒ^[ƒQƒbƒgiƒvƒŒƒCƒ„[j‚ğæ“¾‚·‚é */
+    APawn* FindPlayerPawn() const;
+
+    /** UŒ‚‚ğ‚İ‚é */
+    void TryAttack();
+
+    // -----------------------------------------------------------------------
+    // “à•”ó‘Ô
+    // -----------------------------------------------------------------------
+    UPROPERTY()
+    TObjectPtr<APawn> TargetPawn;
+
+    float AttackTimer = 0.f;
+
 };

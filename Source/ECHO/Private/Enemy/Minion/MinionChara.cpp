@@ -149,6 +149,7 @@ void AMinionChara::PerformAttackTrace()
 	DrawDebugCapsule(GetWorld(), (start + end) * 0.5f, m_attackTraceLength * 0.5f, m_attackTraceRadius, FQuat::Identity, debugColor, false, 1.f);
 #endif
 	
+	//ヒットしたアクターに対してダメージを与える
 	for (FHitResult& hit : hitResults)
 	{
 		AActor* hitActor = hit.GetActor();
@@ -164,13 +165,19 @@ void AMinionChara::PerformAttackTrace()
 	}
 }
 
-
+//倒されたときの関数
 void AMinionChara::Die()
 {
 	//突進中なら止める
 	if (m_isRushing)
 	{
 		StopRush();
+	}
+
+	//現在のステートをDeadにする
+	if (AMinionAIController* aiCtrl = Cast<AMinionAIController>(GetController()))
+	{
+		aiCtrl->NotifyDead();
 	}
 
 	//基底クラスのDie関数を呼び出す
