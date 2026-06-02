@@ -257,6 +257,15 @@ void AActionCharacter::UpdateLockOnCamera(float DeltaTime)
 
 void AActionCharacter::Move(const FInputActionValue& Value)
 {
+    //回避中なら、以降の移動入力を一切行わずに終了する
+    if (UActionMovementComponent* MoveComp = Cast<UActionMovementComponent>(GetCharacterMovement()))
+    {
+        if (MoveComp->bIsDodging)
+        {
+            return;
+        }
+    }
+
     //入力値を2Dベクトルとして取得
     const FVector2D MovementVector = Value.Get<FVector2D>();
 
@@ -408,7 +417,7 @@ void AActionCharacter::SummonGhost()
     if (CurrentEnergy < GhostSummonCost)
     {
         GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Red,
-            FString::Printf(TEXT("エネルギー不足: %.1f / %.1f"), CurrentEnergy, GhostSummonCost));
+            FString::Printf(TEXT("Not Energy: %.1f / %.1f"), CurrentEnergy, GhostSummonCost));
         return;
     }
 
@@ -416,7 +425,7 @@ void AActionCharacter::SummonGhost()
     if (ActiveGhostCount >= MaxGhostCount)
     {
         GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Orange,
-            TEXT("分身の上限に達しています"));
+            TEXT("MaxGhostCount!"));
         return;
     }
 
@@ -427,7 +436,7 @@ void AActionCharacter::SummonGhost()
     if (Snapshot.IsEmpty())
     {
         GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Yellow,
-            TEXT("記録データなし。まず動いてください"));
+            TEXT("NO Data MoveMore"));
         return;
     }
 
