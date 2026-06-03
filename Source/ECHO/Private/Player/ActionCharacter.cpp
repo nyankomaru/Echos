@@ -12,6 +12,7 @@
 #include "GameFramework/SpringArmComponent.h"
 #include "Camera/CameraComponent.h"
 #include "DrawDebugHelpers.h"
+#include "Ghost/GhostAttackTrap.h"
 
 AActionCharacter::AActionCharacter(const FObjectInitializer& ObjectInitializer)
     : Super(ObjectInitializer.SetDefaultSubobjectClass<UActionMovementComponent>(
@@ -89,6 +90,12 @@ void AActionCharacter::BeginPlay()
     if (CombatComponent)
     {
         CombatComponent->OnHitEnemy.AddUObject(this, &AActionCharacter::OnHitEnemy);
+
+        // コンボ段が始まった瞬間に「最後に使った攻撃」を記録
+        CombatComponent->OnComboStepStarted.AddUObject(
+            this,
+            &AActionCharacter::RecordLastComboStep
+        );
     }
 
     DefaultSocketOffset = CameraBoom->SocketOffset;
@@ -144,6 +151,8 @@ void AActionCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCom
         EIC->BindAction(DodgeAction, ETriggerEvent::Started, this, &AActionCharacter::Dodge);
         //召喚バインド
         EIC->BindAction(SummonAction, ETriggerEvent::Started, this, &AActionCharacter::SummonGhost);
+        // 追加：罠型分身召喚
+        EIC->BindAction(GhostTrapAction, ETriggerEvent::Started, this, &AActionCharacter::UseGhostAttackTrap);
     }
 }
 
@@ -462,4 +471,235 @@ void AActionCharacter::SummonGhost()
 
     GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Green,
         FString::Printf(TEXT("Ghost 召喚！ アクティブ数: %d"), ActiveGhostCount));
+}
+
+bool AActionCharacter::SpawnGhostAttackTrapFromAttackData(
+    const FGhostTrapAttackData& TrapAttackData)
+{
+    // 生成する残像罠クラスが設定されていない場合は生成できない
+    if (!GhostAttackTrapClass)
+    {
+        if (GEngine)
+        {
+            // デバッグ用に、クラス未設定で生成できないことを表示
+            GEngine->AddOnScreenDebugMessage(
+                -1,
+                1.5f,
+                FColor::Red,
+                TEXT("GhostTrap: GhostAttackTrapClass is null")
+            );
+        }
+
+        // 生成失敗
+        return false;
+    }
+
+    // Worldが取得できない場合はActorを生成できないため失敗扱いにする
+    if (!GetWorld()) return false;
+
+    // すでに破棄済み、または破棄中の残像罠を管理配列から取り除く
+    CleanupGhostAttackTraps();
+
+    // 残像罠の設置数が上限に達している場合、
+    // 古い罠から順番に削除して上限数を維持する
+    while (ActiveGhostAttackTraps.Num() >= MaxGhostAttackTrapCount)
+    {
+        // 配列の先頭を最も古い罠として扱う
+        AGhostAttackTrap* OldTrap = ActiveGhostAttackTraps[0];
+
+        // 管理配列から古い罠を削除
+        ActiveGhostAttackTraps.RemoveAt(0);
+
+        if (OldTrap)
+        {
+            // 実際のActorも破棄する
+            OldTrap->Destroy();
+        }
+    }
+
+    // 基本の生成位置はプレイヤーの現在位置
+    FVector SpawnLocation = GetActorLocation();
+
+    if (!FMath::IsNearlyZero(GhostAttackTrapBackOffset))
+    {
+        // 指定されている場合、プレイヤーの後方に少しずらして生成する
+        // プレイヤー本体と残像罠が完全に重なることを防ぐため
+        SpawnLocation -= GetActorForwardVector() * GhostAttackTrapBackOffset;
+    }
+
+    // プレイヤーの現在の向きと同じ向きで残像罠を生成する
+    const FRotator SpawnRotation = GetActorRotation();
+
+    // 生成時に使用する位置・回転情報を作成
+    const FTransform SpawnTransform(SpawnRotation, SpawnLocation);
+
+    // Actor生成時のパラメータを設定
+    FActorSpawnParameters Params;
+
+    // このキャラクターをOwnerとして設定
+    Params.Owner = this;
+
+    // 攻撃元としてこのキャラクターを設定
+    // ダメージ処理やInstigator参照に使用できる
+    Params.Instigator = this;
+
+    // 生成位置に他のActorが重なっていても強制的に生成する
+    Params.SpawnCollisionHandlingOverride =
+        ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+    // 残像罠Actorを生成する
+    AGhostAttackTrap* Trap = GetWorld()->SpawnActor<AGhostAttackTrap>(
+        GhostAttackTrapClass,
+        SpawnTransform,
+        Params
+    );
+
+    // 生成に失敗した場合は失敗扱いにする
+    if (!Trap)
+    {
+        return false;
+    }
+
+    // 生成した残像罠を初期化する
+    // 生成位置、生成元Actor、再現する攻撃データを渡す
+    Trap->InitializeTrap(SpawnTransform, this, TrapAttackData);
+
+    // 管理用配列に追加
+    // 最大数制限や破棄済みチェックを行うために保持する
+    ActiveGhostAttackTraps.Add(Trap);
+
+    if (GEngine)
+    {
+        // デバッグ用に、記録済み攻撃から残像罠を生成したことを表示
+        GEngine->AddOnScreenDebugMessage(
+            -1,
+            1.5f,
+            FColor::Cyan,
+            FString::Printf(TEXT("GhostTrap Spawned From Recorded Combo: %d"), TrapAttackData.ComboIndex)
+        );
+    }
+
+    // 生成成功
+    return true;
+}
+
+void AActionCharacter::CleanupGhostAttackTraps()
+{
+    // 管理配列の中から、無効になった罠を削除する
+    // Destroy済みのActorを残したままにすると、最大数判定などが正しく動かなくなる
+    ActiveGhostAttackTraps.RemoveAll([](const TObjectPtr<AGhostAttackTrap>& Trap)
+        {
+            // nullptr、または破棄処理中のActorなら配列から取り除く
+            return !Trap.Get() || Trap->IsActorBeingDestroyed();
+        });
+}
+
+void AActionCharacter::RecordLastComboStep(
+    int32 ComboIndex,
+    const FComboStepData& ComboStep)
+{
+    // 最後に使用したコンボ攻撃のモンタージュを記録
+    LastGhostTrapAttackData.Montage = ComboStep.Montage;
+
+    // 攻撃判定の半径を記録
+    LastGhostTrapAttackData.HitRadius = ComboStep.HitRadius;
+
+    // 攻撃判定を前方に伸ばす距離を記録
+    LastGhostTrapAttackData.HitRange = ComboStep.HitRange;
+
+    // 攻撃が命中した際のダメージ量を記録
+    LastGhostTrapAttackData.Damage = ComboStep.Damage;
+
+    // 攻撃が命中した際の吹き飛ばし力を記録
+    LastGhostTrapAttackData.LaunchForce = ComboStep.LaunchForce;
+
+    // どのコンボ段階の攻撃だったかを記録
+    LastGhostTrapAttackData.ComboIndex = ComboIndex;
+
+    // 残像罠として使用できる攻撃データが記録済みであることを示す
+    bHasRecordedGhostTrapAttack = true;
+
+    if (GEngine)
+    {
+        // デバッグ用に、どのコンボ攻撃を記録したか画面表示する
+        GEngine->AddOnScreenDebugMessage(
+            -1,
+            1.2f,
+            FColor::Green,
+            FString::Printf(TEXT("GhostTrap Attack Recorded Combo: %d"), ComboIndex)
+        );
+    }
+}
+
+void AActionCharacter::UseGhostAttackTrap()
+{
+    // 残像罠機能が無効なら使用しない
+    if (!bEnableGhostAttackTrap)
+    {
+        return;
+    }
+
+    // まだ攻撃データが記録されていない場合は罠を生成できない
+    if (!bHasRecordedGhostTrapAttack)
+    {
+        if (GEngine)
+        {
+            // デバッグ用に、記録済み攻撃がないことを表示
+            GEngine->AddOnScreenDebugMessage(
+                -1,
+                1.5f,
+                FColor::Yellow,
+                TEXT("GhostTrap: No recorded attack")
+            );
+        }
+        return;
+    }
+
+    // 現在のエネルギーが残像罠の使用コスト未満なら使用できない
+    if (CurrentEnergy < GhostAttackTrapCost)
+    {
+        if (GEngine)
+        {
+            // デバッグ用に、エネルギー不足で使用できないことを表示
+            GEngine->AddOnScreenDebugMessage(
+                -1,
+                1.5f,
+                FColor::Red,
+                FString::Printf(
+                    TEXT("GhostTrap: Not enough energy %.1f / %.1f"),
+                    CurrentEnergy,
+                    GhostAttackTrapCost
+                )
+            );
+        }
+        return;
+    }
+
+    // 記録しておいた最後の攻撃データをもとに残像罠を生成する
+    const bool bSpawned = SpawnGhostAttackTrapFromAttackData(LastGhostTrapAttackData);
+
+    // 生成に失敗した場合は、エネルギーを消費せずに処理を終了する
+    if (!bSpawned)
+    {
+        return;
+    }
+
+    // 残像罠の使用コスト分だけエネルギーを消費する
+    // Clampで0未満にならないようにしつつ、最大値も超えないようにする
+    CurrentEnergy = FMath::Clamp(CurrentEnergy - GhostAttackTrapCost, 0.f, MaxEnergy);
+
+    if (GEngine)
+    {
+        // デバッグ用に、残像罠を使用したことと現在のエネルギー量を表示
+        GEngine->AddOnScreenDebugMessage(
+            -1,
+            1.5f,
+            FColor::Cyan,
+            FString::Printf(
+                TEXT("GhostTrap Used! Energy: %.1f / %.1f"),
+                CurrentEnergy,
+                MaxEnergy
+            )
+        );
+    }
 }

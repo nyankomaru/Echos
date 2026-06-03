@@ -50,6 +50,13 @@ struct FComboStepData
 	float ComboResetTime = 1.0f;
 };
 
+// 追加：コンボ段が開始されたことを外部へ通知する
+DECLARE_MULTICAST_DELEGATE_TwoParams(
+	FOnComboStepStartedDelegate,
+	int32,
+	const FComboStepData&
+);
+
 
 UCLASS(ClassGroup = (Custom), meta = (BlueprintSpawnableComponent))
 class ECHO_API UCombatComponent : public UActorComponent
@@ -79,6 +86,9 @@ public:
 	void CloseComboWindow();
 
 	FOnHitEnemyDelegate OnHitEnemy;
+
+	// 追加：コンボ段開始通知
+	FOnComboStepStartedDelegate OnComboStepStarted;
 
 protected:
 	//BPからコンボルートや各段数のパラメータを設定する配列

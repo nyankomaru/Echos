@@ -51,6 +51,9 @@ void UCombatComponent::ExecuteComboStep(int32 StepIndex)
     bComboInputBuffered = false;
     HitActorsThisAttack.Empty();
 
+    // 追加：このコンボ段が始まったことを通知
+    OnComboStepStarted.Broadcast(StepIndex, Step);
+
     //以前のコンボリセットタイマーをクリア、再セット
     GetWorld()->GetTimerManager().ClearTimer(ComboResetTimerHandle);
     GetWorld()->GetTimerManager().SetTimer(

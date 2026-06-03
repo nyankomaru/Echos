@@ -10,9 +10,10 @@
 #include "Player/LockOnComponent.h"
 #include "Ghost/GhostCharacter/GhostCharacter.h"
 #include "Player/GhostRecorderComponent.h"
+#include "Player/CombatComponent.h"
+#include "Ghost/GhostAttackTrap.h"
 #include "ActionCharacter.generated.h"
 
-class UCombatComponent;
 class USpringArmComponent;
 class UCameraComponent;
 class UGhostManagerComponent;
@@ -67,6 +68,12 @@ protected:
 	//召喚アクション
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
 	class UInputAction* SummonAction;
+
+	//　追加　罠召喚
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	class UInputAction* GhostTrapAction;
+
+	void UseGhostAttackTrap();
 
 	// -----------------------------------------------------------------------
 	// 移動
@@ -203,4 +210,37 @@ private:
 
 	void OnJumpPressed();	//ボタンを入力時
 	void OnJumpReleased();	//ボタンを離したとき
+
+	// -----------------------------------------------------------------------
+	// 追加　Ghost Trap System
+	// -----------------------------------------------------------------------
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ghost|Trap", meta = (AllowPrivateAccess = "true"))
+	TSubclassOf<AGhostAttackTrap> GhostAttackTrapClass;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ghost|Trap", meta = (AllowPrivateAccess = "true"))
+	bool bEnableGhostAttackTrap = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ghost|Trap", meta = (AllowPrivateAccess = "true"))
+	float GhostAttackTrapCost = 10.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ghost|Trap", meta = (AllowPrivateAccess = "true"))
+	int32 MaxGhostAttackTrapCount = 5;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ghost|Trap", meta = (AllowPrivateAccess = "true"))
+	float GhostAttackTrapBackOffset = 0.f;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Ghost|Trap", meta = (AllowPrivateAccess = "true"))
+	bool bHasRecordedGhostTrapAttack = false;
+
+	UPROPERTY()
+	FGhostTrapAttackData LastGhostTrapAttackData;
+
+	UPROPERTY()
+	TArray<TObjectPtr<AGhostAttackTrap>> ActiveGhostAttackTraps;
+
+	void RecordLastComboStep(int32 ComboIndex, const FComboStepData& ComboStep);
+	bool SpawnGhostAttackTrapFromAttackData(const FGhostTrapAttackData& TrapAttackData);
+	void CleanupGhostAttackTraps();
+
 };
