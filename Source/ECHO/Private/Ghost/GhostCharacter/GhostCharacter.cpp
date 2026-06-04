@@ -22,7 +22,7 @@ AGhostCharacter::AGhostCharacter()
     // コンポーネント
     // -----------------------------------------------------------------------
     PlaybackComponent = CreateDefaultSubobject<UGhostPlaybackComponent>(TEXT("PlaybackComponent"));
-    CombatComponent = CreateDefaultSubobject<UCombatComponent>(TEXT("CombatComponent_New"));
+    CombatComponent = CreateDefaultSubobject<UCombatComponent>(TEXT("CombatComponent"));
     EnemyComponent = CreateDefaultSubobject<UGhostEnemyComponent>(TEXT("EnemyComponent"));
 
     // -----------------------------------------------------------------------

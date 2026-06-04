@@ -19,50 +19,33 @@ public:
     UGhostEnemyComponent();
 
     virtual void BeginPlay() override;
-    virtual void TickComponent(
-        float DeltaTime,
-        ELevelTick TickType,
-        FActorComponentTickFunction* ThisTickFunction) override;
+    virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
-    // -----------------------------------------------------------------------
-    // 外部 API
-    // -----------------------------------------------------------------------
-
-    /** 召喚時に呼んでタイマーをスタートさせる */
+    //召喚時に呼んでタイマーをスタートさせる
     void StartLifetimeTimer();
 
-    /** 現在の状態を返す */
+    //現在の状態を返す
     UFUNCTION(BlueprintPure, Category = "Ghost|Enemy")
     EGhostLifecycleState GetLifecycleState() const { return CurrentState; }
 
-    /** 残り時間（秒）を返す（UI 用） */
+    //残り時間（秒）を返す（UI 用）
     UFUNCTION(BlueprintPure, Category = "Ghost|Enemy")
     float GetRemainingTime() const;
 
-    /** 正規化した残り時間（0?1）を返す（UI ゲージ用） */
+    //正規化した残り時間
     UFUNCTION(BlueprintPure, Category = "Ghost|Enemy")
     float GetRemainingTimeNormalized() const;
 
-    // -----------------------------------------------------------------------
-    // イベント
-    // -----------------------------------------------------------------------
-
-    /** Friendly/Warning/Corrupted/Enemy/Dead のいずれかに変化したとき発火 */
+    //Friendly/Warning/Corrupted/Enemy/Dead のいずれかに変化したとき発火
     UPROPERTY(BlueprintAssignable, Category = "Ghost|Enemy")
     FOnGhostStateChanged OnStateChanged;
 
-    // -----------------------------------------------------------------------
-    // 設定
-    // -----------------------------------------------------------------------
-
-    /** 敵化までの時間（秒） */
-    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Ghost|Enemy",
-        meta = (ClampMin = "5.0", ClampMax = "120.0"))
+    //敵化するまでの秒数。
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ghost|Lifecycle", meta = (ClampMin = "5.0", ClampMax = "120.0"))
     float LifetimeSeconds = 30.f;
 
-    /** Warning 演出を開始する残り秒数 */
-    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Ghost|Enemy",
-        meta = (ClampMin = "1.0", ClampMax = "10.0"))
+    /** 敵化の何秒前から Warning 状態にするか */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ghost|Lifecycle", meta = (ClampMin = "1.0", ClampMax = "10.0"))
     float WarningThreshold = 3.f;
 
 private:

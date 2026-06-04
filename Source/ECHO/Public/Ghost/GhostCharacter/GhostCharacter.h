@@ -30,72 +30,50 @@ protected:
     virtual void BeginPlay() override;
 
 public:
-    // -----------------------------------------------------------------------
     // IAbilitySystemInterface
-    // -----------------------------------------------------------------------
     virtual UAbilitySystemComponent* GetAbilitySystemComponent() const override;
 
-    // -----------------------------------------------------------------------
     // 初期化（召喚後に呼ばれる）
-    // -----------------------------------------------------------------------
-    void InitializeGhost(
-        const TArray<FGhostActionData>& Snapshot,
-        UGhostRecorderComponent* Recorder);
+    void InitializeGhost(const TArray<FGhostActionData>& Snapshot, UGhostRecorderComponent* Recorder);
 
-    // -----------------------------------------------------------------------
     // 敵化処理
-    // GhostEnemyComponent::Corrupt() から呼ばれる
-    // ① メッシュマテリアルを EnemyMaterial に変更
-    // ② GhostAIControllerClass をスポーンして Possess
-    // -----------------------------------------------------------------------
     void ActivateEnemyAI();
 
-    // -----------------------------------------------------------------------
-    // コンポーネント（public にして PlaybackComponent / CombatComponent を
-    // GhostEnemyComponent / GhostPlaybackComponent から参照できるようにする）
-    // -----------------------------------------------------------------------
+    //Playback コンポーネント
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Ghost|Components")
     UGhostPlaybackComponent* PlaybackComponent;
 
+	//戦闘関連のコンポーネント
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Ghost|Components")
     UCombatComponent* CombatComponent;
 
+	//敵モードの追加コンポーネント
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Ghost|Components")
     UGhostEnemyComponent* EnemyComponent;
 
-    // -----------------------------------------------------------------------
-    // GAS
-    // ※ "AbilitySystemComponent" は IAbilitySystemInterface のマクロ展開と
-    //   衝突するため GhostASC という名前にしている
-    // -----------------------------------------------------------------------
+    //GAS
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Ghost|GAS")
     UGhostAbilitySystemComponent* GhostASC;
 
-    // -----------------------------------------------------------------------
-    // BP 設定
-    // -----------------------------------------------------------------------
-
-    /** 攻撃アビリティ（BP_GhostCharacter の Class Defaults で設定） */
+    //攻撃アビリティ
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Ghost|GAS")
     TSubclassOf<UGameplayAbility> AttackAbilityClass;
 
-    /** 回避アビリティ（BP_GhostCharacter の Class Defaults で設定） */
+    //回避アビリティ
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Ghost|GAS")
     TSubclassOf<UGameplayAbility> DodgeAbilityClass;
 
-    /** 敵化時にスポーンする AIController */
+    //敵化時にスポーンする AIController
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Ghost|AI")
     TSubclassOf<AAIController> GhostAIControllerClass;
 
-    /**
-     * 敵化時にメッシュへ適用するマテリアル（赤い半透明を推奨）
-     * 未設定の場合はスキップ（エラーにはならない）
-     */
+    
+    //敵化時にメッシュへ適用するマテリアル
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Ghost|Visual")
     UMaterialInterface* EnemyMaterial;
 
 private:
-    /** GAS 二重初期化防止フラグ */
+    //GAS 二重初期化防止フラグ
     bool bGASInitialized = false;
 
     void GrantDefaultAbilities();

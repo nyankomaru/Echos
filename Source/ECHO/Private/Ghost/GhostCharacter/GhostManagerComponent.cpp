@@ -4,27 +4,29 @@
 #include "Ghost/GhostEnemy/GhostEnemyComponent.h"
 #include "GameFramework/Character.h"
 
+//コンストラクタ
 UGhostManagerComponent::UGhostManagerComponent()
 {
     PrimaryComponentTick.bCanEverTick = false;
 }
 
+//開始時に呼ばれる関数
 void UGhostManagerComponent::BeginPlay()
 {
+	//親クラスの BeginPlay を呼び出す
     Super::BeginPlay();
 
     // オーナーから GhostRecorderComponent を取得
     RecorderRef = GetOwner()->FindComponentByClass<UGhostRecorderComponent>();
 
+	// GhostRecorderComponent が見つからない場合の処理
     if (!RecorderRef)
     {
         return;
     }
 }
 
-// -----------------------------------------------------------------------
-// TrySummon
-// -----------------------------------------------------------------------
+//生成を試みる
 bool UGhostManagerComponent::TrySummon(float Cost)
 {
     CleanupDeadGhosts();
@@ -35,6 +37,7 @@ bool UGhostManagerComponent::TrySummon(float Cost)
         return false;
     }
 
+	// コストチェック（実装は呼び出し元に任せる）
     if (!GhostCharacterClass || !RecorderRef)
     {
         return false;
@@ -48,9 +51,7 @@ bool UGhostManagerComponent::TrySummon(float Cost)
         return false;
     }
 
-    // -----------------------------------------------------------------------
     // スポーン位置：プレイヤー周囲に分散して配置
-    // -----------------------------------------------------------------------
     ACharacter* Owner = Cast<ACharacter>(GetOwner());
     if (!Owner) return false;
 
@@ -60,16 +61,14 @@ bool UGhostManagerComponent::TrySummon(float Cost)
     const FVector Offset = FRotator(0.f, Angle, 0.f).RotateVector(SpawnOffset);
     const FVector SpawnLoc = Owner->GetActorLocation() + Yaw.RotateVector(Offset);
 
+	//ActorSpawnParameters 設定
     FActorSpawnParameters Params;
-    Params.SpawnCollisionHandlingOverride =
-        ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+    Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
 
-    AGhostCharacter* Ghost = GetWorld()->SpawnActor<AGhostCharacter>(
-        GhostCharacterClass,
-        SpawnLoc,
-        Owner->GetActorRotation(),
-        Params);
+	//分身をスポーン
+    AGhostCharacter* Ghost = GetWorld()->SpawnActor<AGhostCharacter>(GhostCharacterClass, SpawnLoc, Owner->GetActorRotation(), Params);
 
+	//スポーン失敗の可能性を考慮
     if (!Ghost)
     {
         UE_LOG(LogTemp, Warning, TEXT("[GhostManager] Ghost のスポーンに失敗しました。"));
@@ -79,17 +78,15 @@ bool UGhostManagerComponent::TrySummon(float Cost)
     // 初期化（再生開始・敵化タイマー開始）
     Ghost->InitializeGhost(Snapshot, RecorderRef);
 
+	//アクティブリストに追加
     ActiveGhosts.Add(Ghost);
 
-    UE_LOG(LogTemp, Log, TEXT("[GhostManager] Ghost 召喚成功。アクティブ数: %d"),
-        ActiveGhosts.Num());
+    UE_LOG(LogTemp, Log, TEXT("[GhostManager] Ghost 召喚成功。アクティブ数: %d"),ActiveGhosts.Num());
 
     return true;
 }
 
-// -----------------------------------------------------------------------
-// CleanupDeadGhosts
-// -----------------------------------------------------------------------
+//既に死亡・無効になった Ghost をリストから除去
 void UGhostManagerComponent::CleanupDeadGhosts()
 {
     ActiveGhosts.RemoveAll([](const TObjectPtr<AGhostCharacter>& G)

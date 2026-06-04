@@ -20,13 +20,16 @@ enum class EGhostActionType : uint8
 UENUM(BlueprintType)
 enum class EGhostPlaybackMode : uint8
 {
-    /** 召喚直後：過去10秒の記録を再生 */
+    //召喚直後：過去10秒の記録を再生
     RecordedPlayback UMETA(DisplayName = "Recorded Playback"),
 
-    /** 記録再生終了後：プレイヤー行動を2秒遅延でミラー */
+    //記録再生終了後：プレイヤー行動を2秒遅延でミラー 
     DelayedMirror    UMETA(DisplayName = "Delayed Mirror"),
 
-    /** 敵化後：AIに制御を移譲（再生停止） */
+    //既時ミラー
+	ImmediateMirror UMETA(DisplayName = "Immediate Mirror"),
+
+    //敵化後：AIに制御を移譲（再生停止）
     EnemyMode        UMETA(DisplayName = "Enemy Mode"),
 };
 
