@@ -95,58 +95,45 @@ private:
 	UPROPERTY(VisibleAnywhere, Category = "GhostTrap|Components")
 	TObjectPtr<USphereComponent> TriggerSphere;
 
-	// 罠が反応する範囲
 	UPROPERTY(EditAnywhere, Category = "GhostTrap|Trigger")
 	float TriggerRadius = 140.f;
 
-	// 罠が自動で消えるまでの時間
 	UPROPERTY(EditAnywhere, Category = "GhostTrap|Life")
 	float LifeTime = 8.f;
 
-	// 罠が起動してから攻撃判定を出すまでの遅延時間
 	UPROPERTY(EditAnywhere, Category = "GhostTrap|Attack")
 	float HitDelay = 0.25f;
 
-	// 攻撃後、罠を破棄するまでの待機時間
+	// 変更：攻撃後に消える時間ではなく、攻撃状態の終了時間
 	UPROPERTY(EditAnywhere, Category = "GhostTrap|Attack")
-	float DestroyDelayAfterAttack = 0.8f;
+	float AttackRecoveryTime = 0.8f;
 
-	// 起動時に対象の敵の方向へ残像を向けるか
+	// 追加：再発動までのリキャスト時間
+	UPROPERTY(EditAnywhere, Category = "GhostTrap|Cooldown")
+	float RecastCooldown = 1.5f;
+
 	UPROPERTY(EditAnywhere, Category = "GhostTrap|Attack")
 	bool bRotateToTargetOnActivate = true;
 
-	// デバッグ用の攻撃判定・範囲表示を行うか
 	UPROPERTY(EditAnywhere, Category = "GhostTrap|Debug")
 	bool bDrawDebug = true;
 
-	// この罠を設置したActor
-	// 自分自身や味方への誤爆判定を避けるためにも使用する
 	UPROPERTY()
 	TObjectPtr<AActor> SourceOwner;
 
-	// 1回の攻撃中にすでに命中したActor一覧
-	// 同じ敵に複数回ダメージが入ることを防ぐ
 	UPROPERTY()
 	TArray<TObjectPtr<AActor>> HitActorsThisAttack;
 
-	// 罠が再現する攻撃データ
 	FGhostTrapAttackData AttackData;
 
-	// 罠がすでに起動済みかどうか
-	// 二重起動を防ぐために使用する
-	bool bActivated = false;
+	// 変更：bActivatedは使わない
+	bool bIsAttacking = false;
+	bool bIsOnCooldown = false;
 
-	// 攻撃判定を遅延実行するためのタイマー
 	FTimerHandle HitTimerHandle;
+	FTimerHandle AttackEndTimerHandle;
+	FTimerHandle CooldownTimerHandle;
 
-	// 攻撃後に罠を破棄するためのタイマー
-	FTimerHandle DestroyTimerHandle;
-
-	/**
-	 * TriggerSphereにActorが入ったときに呼ばれる処理
-	 *
-	 * 入ってきたActorが有効な敵であれば罠を起動する。
-	 */
 	UFUNCTION()
 	void OnTriggerBeginOverlap(
 		UPrimitiveComponent* OverlappedComp,
@@ -156,34 +143,17 @@ private:
 		bool bFromSweep,
 		const FHitResult& SweepResult);
 
-	/**
-	 * 罠を起動する
-	 *
-	 * 攻撃モンタージュの再生、攻撃判定タイマーの開始、
-	 * 必要であれば敵方向への回転を行う。
-	 */
 	void ActivateTrap(AActor* TargetActor);
 
-	/**
-	 * 生成直後、すでにトリガー範囲内に敵がいるか確認する
-	 *
-	 * 生成時点で敵と重なっている場合でも、
-	 * OnBeginOverlapが呼ばれない可能性があるため補助的に使用する。
-	 */
+	void FinishAttack();
+	void FinishCooldown();
+
 	void CheckInitialOverlaps();
 
-	/**
-	 * 指定されたActorが攻撃対象として有効な敵か判定する
-	 *
-	 * SourceOwner自身や無効なActor、
-	 * 敵ではないActorを除外するために使用する。
-	 */
-	bool IsValidEnemy(AActor* Actor) const;
+	// 追加：クールダウン終了時などに範囲内の敵を確認する
+	void TryActivateFromOverlappingEnemies();
 
-	/**
-	 * 罠を設置したActorのControllerを取得する
-	 *
-	 * ダメージ処理でInstigatorControllerとして渡すために使用する。
-	 */
+	bool CanActivateTrap() const;
+	bool IsValidEnemy(AActor* Actor) const;
 	AController* GetSourceController() const;
 };

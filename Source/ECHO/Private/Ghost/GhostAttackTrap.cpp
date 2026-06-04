@@ -99,22 +99,7 @@ void AGhostAttackTrap::InitializeTrap(
 
 void AGhostAttackTrap::CheckInitialOverlaps()
 {
-	// すでに起動済み、またはTriggerSphereが無効なら処理しない
-	if (bActivated || !TriggerSphere) return;
-
-	// 現在TriggerSphereと重なっているActorを取得
-	TArray<AActor*> OverlappingActors;
-	TriggerSphere->GetOverlappingActors(OverlappingActors);
-
-	for (AActor* Actor : OverlappingActors)
-	{
-		// 有効な敵がいれば即座に罠を起動
-		if (IsValidEnemy(Actor))
-		{
-			ActivateTrap(Actor);
-			return;
-		}
-	}
+	TryActivateFromOverlappingEnemies();
 }
 
 void AGhostAttackTrap::OnTriggerBeginOverlap(
@@ -125,13 +110,9 @@ void AGhostAttackTrap::OnTriggerBeginOverlap(
 	bool bFromSweep,
 	const FHitResult& SweepResult)
 {
-	// 二重起動を防ぐ
-	if (bActivated) return;
-
-	// 触れたActorが攻撃対象として有効な敵でなければ無視
+	if (!CanActivateTrap()) return;
 	if (!IsValidEnemy(OtherActor)) return;
 
-	// 有効な敵が範囲に入ったため罠を起動
 	ActivateTrap(OtherActor);
 }
 
@@ -152,50 +133,36 @@ bool AGhostAttackTrap::IsValidEnemy(AActor* Actor) const
 
 void AGhostAttackTrap::ActivateTrap(AActor* TargetActor)
 {
-	// 二重起動を防ぐ
-	if (bActivated) return;
-	bActivated = true;
+	if (!CanActivateTrap()) return;
 
-	// 今回の攻撃で命中したActorリストを初期化
-	// 1回の攻撃中に同じ敵へ複数回ダメージが入らないようにする
+	bIsAttacking = true;
+	bIsOnCooldown = false;
+
+	// 1回の攻撃ごとにヒット済みリストをリセット
 	HitActorsThisAttack.Empty();
-
-	if (TriggerSphere)
-	{
-		// 罠が起動した後は、再度オーバーラップしないように当たり判定を無効化
-		TriggerSphere->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-	}
 
 	if (bRotateToTargetOnActivate && TargetActor)
 	{
-		// 対象の敵がいる方向を計算
 		FVector ToTarget = TargetActor->GetActorLocation() - GetActorLocation();
-
-		// 上下方向の差は無視し、水平面上だけで向きを決める
 		ToTarget.Z = 0.f;
 
-		// 有効な方向ベクトルであれば、罠を敵の方向へ向ける
 		if (!ToTarget.IsNearlyZero())
 		{
 			SetActorRotation(ToTarget.GetSafeNormal().Rotation());
 		}
 	}
 
-	// 再生したモンタージュの長さ
-	// 罠を消すタイミングの計算に使用する
 	float MontageLength = 0.f;
 
 	if (AttackData.Montage && GhostMesh)
 	{
-		// GhostMeshのAnimInstanceを取得し、攻撃モンタージュを再生する
 		if (UAnimInstance* AnimInstance = GhostMesh->GetAnimInstance())
 		{
 			MontageLength = AnimInstance->Montage_Play(AttackData.Montage);
 		}
 	}
 
-	// 罠起動後、少し遅らせて攻撃判定を実行する
-	// モンタージュの攻撃タイミングに合わせるための遅延
+	// 攻撃判定タイマー
 	GetWorld()->GetTimerManager().SetTimer(
 		HitTimerHandle,
 		this,
@@ -204,25 +171,30 @@ void AGhostAttackTrap::ActivateTrap(AActor* TargetActor)
 		false
 	);
 
-	// 攻撃後の削除待機時間とモンタージュ時間を比較し、長い方を採用
-	// モンタージュ再生中に罠が消えてしまうことを防ぐ
-	const float DestroyDelay = FMath::Max(DestroyDelayAfterAttack, MontageLength);
+	// 攻撃終了タイマー
+	const float ActualAttackEndTime = FMath::Max3(
+		AttackRecoveryTime,
+		MontageLength,
+		HitDelay + 0.05f
+	);
 
-	// 罠を削除するためのタイマー処理
-	// BindWeakLambdaにすることで、Actor破棄済みの場合の安全性を高める
-	FTimerDelegate DestroyDelegate;
-	DestroyDelegate.BindWeakLambda(this, [this]()
-		{
-			Destroy();
-		});
-
-	// 指定時間後に罠を削除
 	GetWorld()->GetTimerManager().SetTimer(
-		DestroyTimerHandle,
-		DestroyDelegate,
-		DestroyDelay,
+		AttackEndTimerHandle,
+		this,
+		&AGhostAttackTrap::FinishAttack,
+		ActualAttackEndTime,
 		false
 	);
+
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(
+			-1,
+			1.2f,
+			FColor::Cyan,
+			TEXT("GhostTrap Attack")
+		);
+	}
 }
 
 void AGhostAttackTrap::CheckTrapHit()
@@ -343,4 +315,69 @@ AController* AGhostAttackTrap::GetSourceController() const
 
 	// ダメージ処理のInstigatorControllerとして使用する
 	return SourcePawn ? SourcePawn->GetController() : nullptr;
+}
+
+bool AGhostAttackTrap::CanActivateTrap() const
+{
+	return !bIsAttacking && !bIsOnCooldown;
+}
+
+void AGhostAttackTrap::TryActivateFromOverlappingEnemies()
+{
+	if (!CanActivateTrap()) return;
+	if (!TriggerSphere) return;
+
+	TArray<AActor*> OverlappingActors;
+	TriggerSphere->GetOverlappingActors(OverlappingActors);
+
+	for (AActor* Actor : OverlappingActors)
+	{
+		if (IsValidEnemy(Actor))
+		{
+			ActivateTrap(Actor);
+			return;
+		}
+	}
+}
+
+void AGhostAttackTrap::FinishAttack()
+{
+	bIsAttacking = false;
+	bIsOnCooldown = true;
+
+	GetWorld()->GetTimerManager().SetTimer(
+		CooldownTimerHandle,
+		this,
+		&AGhostAttackTrap::FinishCooldown,
+		RecastCooldown,
+		false
+	);
+
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(
+			-1,
+			1.2f,
+			FColor::Blue,
+			TEXT("GhostTrap Cooldown")
+		);
+	}
+}
+
+void AGhostAttackTrap::FinishCooldown()
+{
+	bIsOnCooldown = false;
+
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(
+			-1,
+			1.2f,
+			FColor::Green,
+			TEXT("GhostTrap Ready")
+		);
+	}
+
+	// クールダウン終了時に、まだ敵が範囲内にいるなら再発動
+	TryActivateFromOverlappingEnemies();
 }
